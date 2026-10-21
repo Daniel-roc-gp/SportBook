@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="SportBook.Api/SportBook.Api.csproj" />
+  <Project Path="SportBook.Core/SportBook.Core.csproj" />
+  <Project Path="SportBook.Infrastructure/SportBook.Infrastructure.csproj" />
+  <Project Path="SportBook.Services/SportBook.Services.csproj" />
+</Solution>
