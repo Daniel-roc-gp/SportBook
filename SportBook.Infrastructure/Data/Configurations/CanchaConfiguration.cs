@@ -10,6 +10,7 @@ namespace SportBook.Infrastructure.Data.Configurations
     {
         public void Configure(EntityTypeBuilder<Cancha> entity)
         {
+            entity.Ignore(e => e.Id);
             entity.HasKey(e => e.IdCancha).HasName("PRIMARY");
 
             entity.ToTable("cancha");

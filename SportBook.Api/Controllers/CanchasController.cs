@@ -1,11 +1,10 @@
 ﻿
 using AutoMapper;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SportBook.Api.Response;
 using SportBook.Core.DTOs;
 using SportBook.Core.Entities;
-using SportBook.Core.Interfaces;
+using SportBook.Services.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -16,45 +15,59 @@ namespace SportBook.Api.Controllers
     [ApiController]
     public class CanchasController : ControllerBase
     {
-        private readonly ICanchaRepository _canchaRepository;
+        private readonly ICanchaService _canchaService;
         private readonly IMapper _mapper;
 
         public CanchasController(
-            ICanchaRepository canchaRepository,
+            ICanchaService canchaService,
             IMapper mapper)
         {
-            _canchaRepository = canchaRepository;
+            _canchaService = canchaService;
             _mapper = mapper;
         }
 
+        // CONSULTAR TODAS LAS CANCHAS
         [HttpGet]
         public async Task<ActionResult> GetCanchas()
         {
             try
             {
-                var canchas = await _canchaRepository.GetAllCanchasAsync();
-                var canchasDto = _mapper.Map<IEnumerable<CanchaDto>>(canchas);
+                var canchas =
+                    await _canchaService.GetAllCanchasAsync();
 
-                return Ok(new ApiResponse<IEnumerable<CanchaDto>>(canchasDto));
+                var canchasDto =
+                    _mapper.Map<IEnumerable<CanchaDto>>(canchas);
+
+                return Ok(
+                    new ApiResponse<IEnumerable<CanchaDto>>(canchasDto));
             }
             catch (Exception)
             {
                 return StatusCode(500,
-                    new ApiResponse<string>("Error al consultar las canchas."));
+                    new ApiResponse<string>(
+                        "Error al consultar las canchas."));
             }
         }
 
+        // CONSULTAR CANCHA POR ID
         [HttpGet("{id:long}")]
         public async Task<ActionResult> GetCanchaById(long id)
         {
+            if (id <= 0)
+                return BadRequest(
+                    new ApiResponse<string>(
+                        "El ID debe ser mayor que cero."));
+
             try
             {
-                var cancha = await _canchaRepository.GetCanchaByIdAsync(id);
+                var cancha =
+                    await _canchaService.GetCanchaByIdAsync(id);
 
                 if (cancha == null)
                 {
                     return NotFound(
-                        new ApiResponse<string>("Cancha no encontrada."));
+                        new ApiResponse<string>(
+                            "Cancha no encontrada."));
                 }
 
                 var canchaDto = _mapper.Map<CanchaDto>(cancha);
@@ -64,40 +77,15 @@ namespace SportBook.Api.Controllers
             catch (Exception)
             {
                 return StatusCode(500,
-                    new ApiResponse<string>("Error al consultar la cancha."));
+                    new ApiResponse<string>(
+                        "Error al consultar la cancha."));
             }
         }
 
-        
-
-        [HttpDelete("{id:long}")]
-        public async Task<ActionResult> DeleteCancha(long id)
-        {
-            try
-            {
-                var cancha = await _canchaRepository.GetCanchaByIdAsync(id);
-
-                if (cancha == null)
-                {
-                    return NotFound(
-                        new ApiResponse<string>("Cancha no encontrada."));
-                }
-
-                await _canchaRepository.DeleteCancha(cancha);
-
-                return Ok(new ApiResponse<string>("Cancha eliminada correctamente."));
-            }
-            catch (Exception)
-            {
-                return StatusCode(500,
-                    new ApiResponse<string>("Error al eliminar la cancha."));
-            }
-        }
-
-        [Authorize(Roles = "ADMINISTRADOR")]
+        // REGISTRAR CANCHA
         [HttpPost]
         public async Task<ActionResult> InsertCancha(
-    [FromBody] CanchaDto canchaDto)
+            [FromBody] CanchaDto canchaDto)
         {
             if (string.IsNullOrWhiteSpace(canchaDto.Nombre) ||
                 canchaDto.Nombre.Length > 60 ||
@@ -106,24 +94,26 @@ namespace SportBook.Api.Controllers
                 canchaDto.IdTipoCancha <= 0)
             {
                 return BadRequest(
-                    new ApiResponse<string>("Los datos de la cancha no son válidos."));
+                    new ApiResponse<string>(
+                        "Los datos de la cancha no son válidos."));
             }
 
             try
             {
-                if (!await _canchaRepository.TipoCanchaExisteAsync(
-                    canchaDto.IdTipoCancha))
-                {
-                    return BadRequest(
-                        new ApiResponse<string>("El tipo de cancha no existe."));
-                }
-
                 var cancha = _mapper.Map<Cancha>(canchaDto);
 
                 cancha.IdCancha = 0;
                 cancha.Activa = true;
 
-                await _canchaRepository.InsertCancha(cancha);
+                var resultado =
+                    await _canchaService.InsertCancha(cancha);
+
+                if (!resultado)
+                {
+                    return BadRequest(
+                        new ApiResponse<string>(
+                            "El tipo de cancha no existe."));
+                }
 
                 var respuesta = _mapper.Map<CanchaDto>(cancha);
 
@@ -134,87 +124,96 @@ namespace SportBook.Api.Controllers
             }
             catch (Exception)
             {
-                return StatusCode(
-                    500,
-                    new ApiResponse<string>("Error al registrar la cancha."));
+                return StatusCode(500,
+                    new ApiResponse<string>(
+                        "Error al registrar la cancha."));
             }
         }
 
-        [Authorize(Roles = "ADMINISTRADOR")]
+        // ACTUALIZAR CANCHA
         [HttpPut("{id:long}")]
         public async Task<ActionResult> UpdateCancha(
-    long id,
-    [FromBody] CanchaDto canchaDto)
+            long id,
+            [FromBody] CanchaDto canchaDto)
         {
             if (id <= 0 ||
-                (canchaDto.IdCancha != 0 && canchaDto.IdCancha != id) ||
+                (canchaDto.IdCancha != 0 &&
+                 canchaDto.IdCancha != id) ||
                 string.IsNullOrWhiteSpace(canchaDto.Nombre) ||
                 canchaDto.Nombre.Length > 60 ||
                 canchaDto.Capacidad <= 0 ||
-                canchaDto.PrecioHora <= 0)
+                canchaDto.PrecioHora <= 0 ||
+                canchaDto.IdTipoCancha <= 0)
             {
                 return BadRequest(
-                    new ApiResponse<string>("Los datos de la cancha no son válidos."));
+                    new ApiResponse<string>(
+                        "Los datos de la cancha no son válidos."));
             }
 
             try
             {
-                var cancha = await _canchaRepository.GetCanchaByIdAsync(id);
+                var cancha =
+                    await _canchaService.GetCanchaByIdAsync(id);
 
                 if (cancha == null)
                 {
                     return NotFound(
-                        new ApiResponse<string>("Cancha no encontrada."));
-                }
-
-                if (!await _canchaRepository.TipoCanchaExisteAsync(
-                    canchaDto.IdTipoCancha))
-                {
-                    return BadRequest(
-                        new ApiResponse<string>("El tipo de cancha no existe."));
+                        new ApiResponse<string>(
+                            "Cancha no encontrada."));
                 }
 
                 _mapper.Map(canchaDto, cancha);
                 cancha.IdCancha = id;
 
-                await _canchaRepository.UpdateCancha(cancha);
+                var resultado =
+                    await _canchaService.UpdateCancha(cancha);
+
+                if (!resultado)
+                {
+                    return BadRequest(
+                        new ApiResponse<string>(
+                            "El tipo de cancha no existe."));
+                }
 
                 return Ok(new ApiResponse<CanchaDto>(
                     _mapper.Map<CanchaDto>(cancha)));
             }
             catch (Exception)
             {
-                return StatusCode(
-                    500,
-                    new ApiResponse<string>("Error al actualizar la cancha."));
+                return StatusCode(500,
+                    new ApiResponse<string>(
+                        "Error al actualizar la cancha."));
             }
         }
 
-        [Authorize(Roles = "ADMINISTRADOR")]
+        // CAMBIAR ESTADO DE CANCHA
         [HttpPatch("{id:long}/estado")]
         public async Task<ActionResult> CambiarEstadoCancha(
-    long id,
-    [FromBody] CambiarEstadoCanchaDto dto)
+            long id,
+            [FromBody] CambiarEstadoCanchaDto dto)
         {
             if (id <= 0)
             {
                 return BadRequest(
-                    new ApiResponse<string>("El ID debe ser mayor que cero."));
+                    new ApiResponse<string>(
+                        "El ID debe ser mayor que cero."));
             }
 
             try
             {
-                var cancha = await _canchaRepository.GetCanchaByIdAsync(id);
+                var cancha =
+                    await _canchaService.GetCanchaByIdAsync(id);
 
                 if (cancha == null)
                 {
                     return NotFound(
-                        new ApiResponse<string>("Cancha no encontrada."));
+                        new ApiResponse<string>(
+                            "Cancha no encontrada."));
                 }
 
                 cancha.Activa = dto.Activa;
 
-                await _canchaRepository.UpdateCancha(cancha);
+                await _canchaService.UpdateCancha(cancha);
 
                 return Ok(new ApiResponse<string>(
                     dto.Activa
@@ -223,9 +222,45 @@ namespace SportBook.Api.Controllers
             }
             catch (Exception)
             {
-                return StatusCode(
-                    500,
-                    new ApiResponse<string>("Error al cambiar el estado de la cancha."));
+                return StatusCode(500,
+                    new ApiResponse<string>(
+                        "Error al cambiar el estado de la cancha."));
+            }
+        }
+
+        // ELIMINAR CANCHA
+        [HttpDelete("{id:long}")]
+        public async Task<ActionResult> DeleteCancha(long id)
+        {
+            if (id <= 0)
+            {
+                return BadRequest(
+                    new ApiResponse<string>(
+                        "El ID debe ser mayor que cero."));
+            }
+
+            try
+            {
+                var cancha =
+                    await _canchaService.GetCanchaByIdAsync(id);
+
+                if (cancha == null)
+                {
+                    return NotFound(
+                        new ApiResponse<string>(
+                            "Cancha no encontrada."));
+                }
+
+                await _canchaService.DeleteCancha(id);
+
+                return Ok(new ApiResponse<string>(
+                    "Cancha eliminada correctamente."));
+            }
+            catch (Exception)
+            {
+                return StatusCode(500,
+                    new ApiResponse<string>(
+                        "Error al eliminar la cancha."));
             }
         }
     }

@@ -1,17 +1,14 @@
 ﻿
 using AutoMapper;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SportBook.Api.Response;
 using SportBook.Core.DTOs;
 using SportBook.Core.Entities;
-using SportBook.Core.Interfaces;
+using SportBook.Services.Interfaces;
 using SportBook.Services.Validators;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Claims;
-using System.Threading.Tasks;
 
 namespace SportBook.Api.Controllers
 {
@@ -19,140 +16,106 @@ namespace SportBook.Api.Controllers
     [ApiController]
     public class ReservasController : ControllerBase
     {
-        private readonly IReservaRepository _reservaRepository;
+        private readonly IReservaService _reservaService;
         private readonly IMapper _mapper;
-        private readonly CrearReservaDtoValidator _crearReservaValidator;
-        private readonly ILogger<ReservasController> _logger;
+        private readonly CrearReservaDtoValidator _crearValidator;
 
         public ReservasController(
-            IReservaRepository reservaRepository,
             IMapper mapper,
-            CrearReservaDtoValidator crearReservaValidator,
-            ILogger<ReservasController> logger)
+            IReservaService reservaService,
+            CrearReservaDtoValidator crearValidator)
         {
-            _reservaRepository = reservaRepository;
+            _reservaService = reservaService;
             _mapper = mapper;
-            _crearReservaValidator = crearReservaValidator;
-            _logger = logger;
+            _crearValidator = crearValidator;
         }
 
-        private bool EsPersonal()
+        #region Sin DTOs
+
+        //[HttpGet]
+        //public async Task<ActionResult> GetReservas()
+        //{
+        //    var reservas = await _reservaService.GetAllReservasAsync();
+        //    return Ok(reservas);
+        //}
+
+        //[HttpGet("{id}")]
+        //public async Task<ActionResult> GetReservaById(long id)
+        //{
+        //    var reserva = await _reservaService.GetReservaByIdAsync(id);
+        //    return Ok(reserva);
+        //}
+
+        #endregion
+
+        #region Con DTOs
+
+        //[HttpGet("dto")]
+        //public async Task<IActionResult> GetReservasDto()
+        //{
+        //    var reservas = await _reservaService.GetAllReservasAsync();
+        //    var reservaDto = _mapper.Map<IEnumerable<ReservaDto>>(reservas);
+        //    return Ok(reservaDto);
+        //}
+
+        //[HttpGet("dto/{id}")]
+        //public async Task<IActionResult> GetReservaByIdDto(long id)
+        //{
+        //    var reserva = await _reservaService.GetReservaByIdAsync(id);
+        //    var reservaDto = _mapper.Map<ReservaDto>(reserva);
+        //    return Ok(reservaDto);
+        //}
+
+        #endregion
+
+        #region Dto-AutoMapper
+
+        // CONSULTAR TODAS LAS RESERVAS
+        [HttpGet("dto/mapper")]
+        public async Task<IActionResult> GetReservasDtoMapper()
         {
-            return User.IsInRole("ADMINISTRADOR") ||
-                   User.IsInRole("ENCARGADO");
+            var reservas = await _reservaService.GetAllReservasAsync();
+
+            var reservaDto =
+                _mapper.Map<IEnumerable<ReservaDto>>(reservas);
+
+            var response =
+                new ApiResponse<IEnumerable<ReservaDto>>(reservaDto);
+
+            return Ok(response);
         }
 
-        private bool ObtenerIdUsuario(out long idUsuario)
-        {
-            var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            return long.TryParse(claim, out idUsuario);
-        }
-
-        [Authorize(Roles = "ADMINISTRADOR,ENCARGADO")]
-        [HttpGet]
-        public async Task<ActionResult> GetReservas()
-        {
-            try
-            {
-                var reservas =
-                    await _reservaRepository.GetAllReservasAsync();
-
-                var reservasDto =
-                    _mapper.Map<IEnumerable<ReservaDto>>(reservas);
-
-                return Ok(
-                    new ApiResponse<IEnumerable<ReservaDto>>(reservasDto));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error al consultar las reservas.");
-
-                return StatusCode(500,
-                    new ApiResponse<string>(
-                        "Error al consultar las reservas."));
-            }
-        }
-
-        [Authorize]
-        [HttpGet("{id:long}")]
-        public async Task<ActionResult> GetReservaById(long id)
+        // CONSULTAR RESERVA POR ID
+        [HttpGet("dto/mapper/{id}")]
+        public async Task<IActionResult> GetReservaByIdDtoMapper(long id)
         {
             if (id <= 0)
-            {
-                return BadRequest(
-                    new ApiResponse<string>(
-                        "El ID debe ser mayor que cero."));
-            }
+                return BadRequest("El ID debe ser mayor que cero.");
 
-            try
-            {
-                var reserva =
-                    await _reservaRepository.GetReservaByIdAsync(id);
+            var reserva = await _reservaService.GetReservaByIdAsync(id);
 
-                if (reserva == null)
-                {
-                    return NotFound(
-                        new ApiResponse<string>("Reserva no encontrada."));
-                }
+            if (reserva == null)
+                return NotFound("Reserva no encontrada.");
 
-                if (!ObtenerIdUsuario(out long idUsuario))
-                {
-                    return Unauthorized(
-                        new ApiResponse<string>(
-                            "No se pudo identificar al usuario."));
-                }
+            var reservaDto = _mapper.Map<ReservaDto>(reserva);
 
-                if (!EsPersonal() && reserva.IdUsuario != idUsuario)
-                {
-                    return Forbid();
-                }
+            var response = new ApiResponse<ReservaDto>(reservaDto);
 
-                var reservaDto = _mapper.Map<ReservaDto>(reserva);
-
-                return Ok(new ApiResponse<ReservaDto>(reservaDto));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex,
-                    "Error al consultar la reserva {Id}.", id);
-
-                return StatusCode(500,
-                    new ApiResponse<string>(
-                        "Error al consultar la reserva."));
-            }
+            return Ok(response);
         }
 
-        [Authorize]
-        [HttpPost]
-        public async Task<ActionResult> InsertReserva(
+        // REGISTRAR RESERVA
+        [HttpPost("dto/mapper")]
+        public async Task<IActionResult> InsertReservaDtoMapper(
             [FromBody] CrearReservaDto reservaDto)
-         {
-            if (!ObtenerIdUsuario(out long idUsuario))
-            {
-                return Unauthorized(
-                    new ApiResponse<string>(
-                        "No se pudo identificar al usuario."));
-            }
-
-            if (User.IsInRole("CLIENTE"))
-            {
-                // El cliente solo puede reservar a su propio nombre.
-                reservaDto.IdUsuario = idUsuario;
-            }
-            else if (!EsPersonal())
-            {
-                return Forbid();
-            }
-
-            // En la base de datos actual, 2 corresponde a CONFIRMADA.
-            reservaDto.IdEstado = 2;
-
+        {
+            // Validar el DTO
             var validationResult =
-                await _crearReservaValidator.ValidateAsync(reservaDto);
+                await _crearValidator.ValidateAsync(reservaDto);
 
             if (!validationResult.IsValid)
             {
-                return BadRequest(new ApiResponse<object>(new
+                return BadRequest(new
                 {
                     message = "Error de validación",
                     errors = validationResult.Errors.Select(e => new
@@ -160,311 +123,268 @@ namespace SportBook.Api.Controllers
                         field = e.PropertyName,
                         error = e.ErrorMessage
                     })
-                }));
+                });
             }
+
+            // El usuario se indica directamente desde el DTO
+            if (reservaDto.IdUsuario <= 0)
+            {
+                return BadRequest(
+                    new ApiResponse<string>(
+                        "Debes indicar un usuario válido."));
+            }
+
+            // En la base de datos actual, 2 corresponde a CONFIRMADA.
+            reservaDto.IdEstado = 2;
 
             try
             {
-                if (!await _reservaRepository.UsuarioActivoExisteAsync(
-                    reservaDto.IdUsuario))
-                {
-                    return BadRequest(
-                        new ApiResponse<string>(
-                            "El usuario no existe o está inactivo."));
-                }
-
-                if (!await _reservaRepository.CanchaActivaExisteAsync(
-                    reservaDto.IdCancha))
-                {
-                    return BadRequest(
-                        new ApiResponse<string>(
-                            "La cancha no existe o está inactiva."));
-                }
-
-                if (!await _reservaRepository.HorarioActivoExisteAsync(
-                    reservaDto.IdHorario))
-                {
-                    return BadRequest(
-                        new ApiResponse<string>(
-                            "El horario no existe o está inactivo."));
-                }
-
-                if (!await _reservaRepository.EstadoReservaExisteAsync(
-                    reservaDto.IdEstado))
-                {
-                    return BadRequest(
-                        new ApiResponse<string>(
-                            "El estado de reserva no existe."));
-                }
-
-                if (await _reservaRepository.ExisteReservaEnHorarioAsync(
-                    reservaDto.IdCancha,
-                    reservaDto.IdHorario,
-                    reservaDto.Fecha))
-                {
-                    return Conflict(
-                        new ApiResponse<string>(
-                            "La cancha ya está reservada para ese día y horario."));
-                }
-
                 var reserva = _mapper.Map<Reserva>(reservaDto);
-                reserva.Codigo = Guid.NewGuid().ToString("N")[..20];
 
-                await _reservaRepository.InsertReserva(reserva);
+                reserva.Codigo =
+                    Guid.NewGuid().ToString("N")[..20];
 
-                var respuesta = _mapper.Map<ReservaDto>(reserva);
+                var resultado =
+                    await _reservaService.InsertReserva(reserva);
 
-                return CreatedAtAction(
-                    nameof(GetReservaById),
-                    new { id = reserva.IdReserva },
-                    new ApiResponse<ReservaDto>(respuesta));
+                switch (resultado)
+                {
+                    case "USER_INVALID":
+                        return BadRequest(
+                            new ApiResponse<string>(
+                                "El usuario no existe o está inactivo."));
+
+                    case "COURT_INVALID":
+                    case "COURT_NOT_FOUND":
+                        return BadRequest(
+                            new ApiResponse<string>(
+                                "La cancha no existe o está inactiva."));
+
+                    case "SCHEDULE_INVALID":
+                        return BadRequest(
+                            new ApiResponse<string>(
+                                "El horario no existe o está inactivo."));
+
+                    case "STATE_INVALID":
+                        return BadRequest(
+                            new ApiResponse<string>(
+                                "El estado de reserva no existe."));
+
+                    case "CAPACITY_EXCEEDED":
+                        return BadRequest(
+                            new ApiResponse<string>(
+                                "La cantidad de jugadores supera la capacidad de la cancha."));
+
+                    case "SLOT_OCCUPIED":
+                        return Conflict(
+                            new ApiResponse<string>(
+                                "La cancha ya está reservada para ese día y horario."));
+
+                    case "OK":
+
+                        var resultDto =
+                            _mapper.Map<ReservaDto>(reserva);
+
+                        return CreatedAtAction(
+                            nameof(GetReservaByIdDtoMapper),
+                            new { id = reserva.IdReserva },
+                            resultDto);
+
+                    default:
+                        return StatusCode(500,
+                            new ApiResponse<string>(
+                                "No se pudo registrar la reserva."));
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error al registrar la reserva.");
-
                 return StatusCode(500,
-                    new ApiResponse<string>(
-                        "Error al registrar la reserva."));
-            }
-
-            var capacidad = await _reservaRepository.GetCapacidadCanchaAsync(
-    reservaDto.IdCancha);
-                
-            if (capacidad == null)
-            {
-                return BadRequest(
-                    new ApiResponse<string>("La cancha no existe."));
-            }
-
-            if (reservaDto.Jugadores > capacidad.Value)
-            {
-                return BadRequest(
-                    new ApiResponse<string>(
-                        "La cantidad de jugadores supera la capacidad de la cancha."));
+                    new
+                    {
+                        message = "Error al registrar la reserva",
+                        error = ex.Message
+                    });
             }
         }
 
-        [Authorize(Roles = "ADMINISTRADOR,ENCARGADO")]
-        [HttpPut("{id:long}")]
-        public async Task<ActionResult> UpdateReserva(
+        // ACTUALIZAR RESERVA
+        [HttpPut("dto/mapper/{id}")]
+        public async Task<IActionResult> UpdateReservaDtoMapper(
             long id,
             [FromBody] ReservaDto reservaDto)
         {
-            if (id <= 0 || id != reservaDto.IdReserva)
-            {
-                return BadRequest(
-                    new ApiResponse<string>(
-                        "El ID de la ruta debe coincidir con el ID de la reserva."));
-            }
+            if (id != reservaDto.IdReserva)
+                return BadRequest("El ID de la reserva no coincide.");
+
+            var reserva =
+                await _reservaService.GetReservaByIdAsync(id);
+
+            if (reserva == null)
+                return NotFound("Reserva no encontrada.");
 
             try
             {
-                var reservaExistente =
-                    await _reservaRepository.GetReservaByIdAsync(id);
+                _mapper.Map(reservaDto, reserva);
 
-                if (reservaExistente == null)
-                {
-                    return NotFound(
-                        new ApiResponse<string>(
-                            "Reserva no encontrada."));
-                }
+                await _reservaService.UpdateReserva(reserva);
 
-                _mapper.Map(reservaDto, reservaExistente);
+                var resultDto =
+                    _mapper.Map<ReservaDto>(reserva);
 
-                await _reservaRepository.UpdateReserva(reservaExistente);
-
-                var respuesta =
-                    _mapper.Map<ReservaDto>(reservaExistente);
-
-                return Ok(new ApiResponse<ReservaDto>(respuesta));
+                return Ok(resultDto);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex,
-                    "Error al actualizar la reserva {Id}.", id);
-
                 return StatusCode(500,
-                    new ApiResponse<string>(
-                        "Error al actualizar la reserva."));
+                    new
+                    {
+                        message = "Error al actualizar la reserva",
+                        error = ex.Message
+                    });
             }
         }
 
-        [Authorize]
-        [HttpPatch("{id:long}/cancelar")]
-        public async Task<ActionResult> CancelarReserva(long id)
+        // CANCELAR RESERVA
+        [HttpPatch("dto/mapper/{id}/cancelar")]
+        public async Task<IActionResult> CancelarReservaDtoMapper(long id)
         {
             if (id <= 0)
-            {
-                return BadRequest(
-                    new ApiResponse<string>(
-                        "El ID debe ser mayor que cero."));
-            }
+                return BadRequest("El ID debe ser mayor que cero.");
 
             try
             {
-                if (!ObtenerIdUsuario(out long idUsuario))
-                {
-                    return Unauthorized(
-                        new ApiResponse<string>(
-                            "No se pudo identificar al usuario."));
-                }
-
                 var reserva =
-                    await _reservaRepository.GetReservaByIdAsync(id);
+                    await _reservaService.GetReservaByIdAsync(id);
 
                 if (reserva == null)
-                {
-                    return NotFound(
-                        new ApiResponse<string>(
-                            "Reserva no encontrada."));
-                }
-
-                if (!EsPersonal() && reserva.IdUsuario != idUsuario)
-                {
-                    return Forbid();
-                }
+                    return NotFound("Reserva no encontrada.");
 
                 var resultado =
-                    await _reservaRepository.CancelarReservaAsync(id);
+                    await _reservaService.CancelarReservaAsync(id);
 
-                if (resultado == "NOT_FOUND")
+                switch (resultado)
                 {
-                    return NotFound(
-                        new ApiResponse<string>(
-                            "Reserva no encontrada."));
-                }
+                    case "NOT_FOUND":
+                        return NotFound("Reserva no encontrada.");
 
-                if (resultado == "CANCEL_STATE_NOT_FOUND")
-                {
-                    return BadRequest(
-                        new ApiResponse<string>(
-                            "No existe un estado de cancelación en la base de datos."));
-                }
+                    case "CANCEL_STATE_NOT_FOUND":
+                    case "STATE_NOT_FOUND":
+                        return BadRequest(
+                            "No existe el estado de cancelación.");
 
-                if (resultado == "ALREADY_CANCELLED")
-                {
-                    return Conflict(
-                        new ApiResponse<string>(
-                            "La reserva ya está cancelada."));
-                }
+                    case "ALREADY_CANCELLED":
+                        return Conflict(
+                            "La reserva ya está cancelada.");
 
-                if (resultado != "OK")
-                {
-                    return StatusCode(500,
-                        new ApiResponse<string>(
-                            "No se pudo cancelar la reserva."));
-                }
+                    case "CANNOT_CANCEL_COMPLETED":
+                        return Conflict(
+                            "No se puede cancelar una reserva completada.");
 
-                return Ok(
-                    new ApiResponse<string>(
-                        "Reserva cancelada correctamente."));
+                    case "OK":
+                        return Ok(
+                            "Reserva cancelada correctamente.");
+
+                    default:
+                        return StatusCode(500,
+                            "No se pudo cancelar la reserva.");
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex,
-                    "Error al cancelar la reserva {Id}.", id);
-
                 return StatusCode(500,
-                    new ApiResponse<string>(
-                        "Error al cancelar la reserva."));
+                    new
+                    {
+                        message = "Error al cancelar la reserva",
+                        error = ex.Message
+                    });
             }
         }
 
-        [Authorize(Roles = "CLIENTE")]
-        [HttpGet("mias")]
-        public async Task<ActionResult> GetMisReservas()
+        // CONSULTAR RESERVAS POR USUARIO
+        [HttpGet("dto/mapper/mias/{idUsuario}")]
+        public async Task<IActionResult> GetMisReservasDtoMapper(
+            long idUsuario)
         {
-            if (!ObtenerIdUsuario(out long idUsuario))
-            {
-                return Unauthorized(
-                    new ApiResponse<string>(
-                        "No se pudo identificar al usuario."));
-            }
+            if (idUsuario <= 0)
+                return BadRequest("El ID del usuario no es válido.");
 
             try
             {
                 var reservas =
-                    await _reservaRepository.GetReservasPorUsuarioAsync(
+                    await _reservaService.GetReservasPorUsuarioAsync(
                         idUsuario);
 
                 var reservasDto =
                     _mapper.Map<IEnumerable<ReservaDto>>(reservas);
 
-                return Ok(
-                    new ApiResponse<IEnumerable<ReservaDto>>(reservasDto));
+                var response =
+                    new ApiResponse<IEnumerable<ReservaDto>>(reservasDto);
+
+                return Ok(response);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex,
-                    "Error al consultar las reservas del usuario.");
-
                 return StatusCode(500,
-                    new ApiResponse<string>(
-                        "Error al consultar las reservas."));
+                    new
+                    {
+                        message = "Error al consultar las reservas",
+                        error = ex.Message
+                    });
             }
         }
-        [Authorize(Roles = "ADMINISTRADOR,ENCARGADO")]
-        [HttpPatch("{id:long}/estado")]
-        public async Task<ActionResult> ActualizarEstadoReserva(
-    long id,
-    [FromBody] ActualizarEstadoReservaDto dto)
+
+        // ACTUALIZAR ESTADO DE RESERVA
+        [HttpPatch("dto/mapper/{id}/estado")]
+        public async Task<IActionResult> ActualizarEstadoReservaDtoMapper(
+            long id,
+            [FromBody] ActualizarEstadoReservaDto dto)
         {
             if (id <= 0 || dto.IdEstado <= 0)
-            {
-                return BadRequest(
-                    new ApiResponse<string>("Los identificadores no son válidos."));
-            }
+                return BadRequest("Los identificadores no son válidos.");
 
             try
             {
-                var resultado = await _reservaRepository
-                    .ActualizarEstadoReservaAsync(id, dto.IdEstado);
+                var resultado =
+                    await _reservaService.ActualizarEstadoReservaAsync(
+                        id, dto.IdEstado);
 
-                if (resultado == "NOT_FOUND")
+                switch (resultado)
                 {
-                    return NotFound(
-                        new ApiResponse<string>("Reserva no encontrada."));
-                }
+                    case "NOT_FOUND":
+                        return NotFound("Reserva no encontrada.");
 
-                if (resultado == "STATE_NOT_FOUND")
-                {
-                    return BadRequest(
-                        new ApiResponse<string>("El estado indicado no existe."));
-                }
+                    case "STATE_NOT_FOUND":
+                        return BadRequest(
+                            "El estado indicado no existe.");
 
-                if (resultado == "ALREADY_IN_STATE")
-                {
-                    return Conflict(
-                        new ApiResponse<string>("La reserva ya tiene ese estado."));
-                }
+                    case "ALREADY_IN_STATE":
+                        return Conflict(
+                            "La reserva ya tiene ese estado.");
 
-                if (resultado == "INVALID_TRANSITION")
-                {
-                    return Conflict(
-                        new ApiResponse<string>(
-                            "La transición de estado no está permitida."));
-                }
+                    case "INVALID_TRANSITION":
+                        return Conflict(
+                            "La transición de estado no está permitida.");
 
-                if (resultado != "OK")
-                {
-                    return StatusCode(
-                        500,
-                        new ApiResponse<string>("No se pudo actualizar el estado."));
-                }
+                    case "OK":
+                        return Ok(
+                            "Estado de reserva actualizado.");
 
-                return Ok(
-                    new ApiResponse<string>("Estado de reserva actualizado."));
+                    default:
+                        return StatusCode(500,
+                            "No se pudo actualizar el estado.");
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex,
-                    "Error al cambiar el estado de la reserva {Id}.", id);
-
-                return StatusCode(
-                    500,
-                    new ApiResponse<string>("Error al cambiar el estado."));
+                return StatusCode(500,
+                    new
+                    {
+                        message = "Error al cambiar el estado",
+                        error = ex.Message
+                    });
             }
         }
+
+        #endregion
     }
 }

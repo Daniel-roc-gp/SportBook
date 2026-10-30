@@ -12,6 +12,7 @@ namespace SportBook.Infrastructure.Data.Configurations
     {
         public void Configure(EntityTypeBuilder<Usuario> entity)
         {
+            entity.Ignore(e => e.Id);
             entity.HasKey(e => e.IdUsuario).HasName("PRIMARY");
 
             entity.ToTable("usuario");

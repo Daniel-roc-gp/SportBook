@@ -13,6 +13,7 @@ namespace SportBook.Infrastructure.Data.Configurations
     {
         public void Configure(EntityTypeBuilder<Reserva> entity)
         {
+            entity.Ignore(e => e.Id);
             entity.HasKey(e => e.IdReserva).HasName("PRIMARY");
 
             entity.ToTable("reserva");

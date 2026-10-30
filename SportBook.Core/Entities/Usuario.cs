@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace SportBook.Core.Entities;
 
-public partial class Usuario
+public partial class Usuario : BaseEntity
 {
     public long IdUsuario { get; set; }
 
